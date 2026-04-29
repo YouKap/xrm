@@ -12,7 +12,6 @@ PLAIN='\033[0m'
 SCRIPT_URL="https://raw.githubusercontent.com/YouKap/xrm/main/xrm.sh"
 XRAY_BIN="/usr/local/bin/xray"
 XRAY_CONF="/usr/local/etc/xray/config.json"
-XRAY_LOG_DIR="/var/log/xray"
 XRAY_ASSETS="/usr/local/share/xray"
 
 # 確保以 Root 權限執行
@@ -21,7 +20,7 @@ XRAY_ASSETS="/usr/local/share/xray"
 # 自我安裝與執行環境校正
 if [[ "$0" != "/usr/local/bin/xrm" ]]; then
     echo -e "${BLUE}>>> 正在同步腳本至全域環境...${PLAIN}"
-    apt-get update && apt-get install -y curl unzip nano
+    apt-get update && apt-get install -y curl unzip nano procps
     curl -sSL "$SCRIPT_URL" -o /usr/local/bin/xrm
     chmod +x /usr/local/bin/xrm
     echo -e "${GREEN}>>> 安裝成功！未來可隨時輸入 'xrm' 呼叫面板。${PLAIN}"
@@ -33,20 +32,14 @@ fi
 # 核心功能模組
 # ==========================================
 
-install_xray() {
+install_update_xray() {
     clear
     echo -e "${BLUE}=== 📦 安裝/更新 Xray-core (含數據文件) ===${PLAIN}"
-    echo -e "${YELLOW}1. 正在安裝 Xray 核心...${PLAIN}"
+    echo -e "${YELLOW}正在執行官方安裝程序...${PLAIN}"
+    # 官方腳本預設會安裝/更新核心與 Geo 數據文件
     bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
-    
-    echo -e "\n${YELLOW}2. 正在下載 Geo 數據文件...${PLAIN}"
-    bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --only-dat-files
-    
-    mkdir -p "$XRAY_LOG_DIR"
-    chown -R nobody:nogroup "$XRAY_LOG_DIR"
-    
-    echo -e "\n${GREEN}✅ 安裝成功！${PLAIN}"
-    read -rp "按 Enter 鍵返回..." dummy < /dev/tty
+    echo -e "\n${GREEN}✅ 安裝/更新成功！${PLAIN}"
+    read -rp "按 Enter 鍵返回..." dummy
 }
 
 edit_config() {
@@ -121,9 +114,7 @@ edit_config() {
     "rules": [
       {
         "type": "field",
-        "protocol": [
-          "dns"
-        ],
+        "protocol": ["dns"],
         "outboundTag": "direct"
       },
       {
@@ -134,9 +125,7 @@ edit_config() {
       },
       {
         "type": "field",
-        "ip": [
-          "geoip:private"
-        ],
+        "ip": ["geoip:private"],
         "outboundTag": "direct"
       },
       {
@@ -150,10 +139,9 @@ edit_config() {
 EOF
     fi
 
-    nano "$XRAY_CONF" < /dev/tty
+    nano "$XRAY_CONF"
     echo -e "\n${YELLOW}正在檢測設定檔語法...${PLAIN}"
     
-    # 改用更具相容性的舊式測試指令格式
     TEST_RES=$(XRAY_LOCATION_ASSET=$XRAY_ASSETS "$XRAY_BIN" -test -config "$XRAY_CONF" 2>&1)
     
     if [ $? -eq 0 ]; then
@@ -166,43 +154,61 @@ EOF
         echo -e "${CYAN}-------------------------------------------------${PLAIN}"
         echo "$TEST_RES"
         echo -e "${CYAN}-------------------------------------------------${PLAIN}"
-        echo -e "${YELLOW}提示：若報錯為 'unknown flag -test'，請手動確認 Xray 版本。${PLAIN}"
     fi
-    read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
+    read -rp "按 Enter 鍵返回主選單..." dummy
+}
+
+manage_service() {
+    clear
+    echo -e "${BLUE}=== ⚡ 3. 服務管理 ===${PLAIN}"
+    echo -e " 1. ${GREEN}啟動${PLAIN} | 2. ${RED}停止${PLAIN} | 3. ${YELLOW}重啟${PLAIN} | 0. 返回"
+    echo -e "-------------------------------------------------"
+    read -rp "請選擇: " s
+    case $s in 
+        1) systemctl start xray && echo -e "${GREEN}已啟動${PLAIN}" ;; 
+        2) systemctl stop xray && echo -e "${RED}已停止${PLAIN}" ;; 
+        3) systemctl restart xray && echo -e "${YELLOW}已重啟${PLAIN}" ;; 
+        0) return ;;
+        *) echo -e "${RED}無效選擇${PLAIN}" ;;
+    esac
+    sleep 1
 }
 
 show_status() {
     while true; do
         clear
-        echo -e "${BLUE}=== 📊 5. 查看狀態與日誌 ===${PLAIN}"
-        systemctl is-active --quiet xray && echo -e "狀態: ${GREEN}▶ 執行中${PLAIN}" || echo -e "狀態: ${RED}■ 已停止${PLAIN}"
+        echo -e "${BLUE}=== 📊 4. 運行狀態監控 ===${PLAIN}"
+        
+        if systemctl is-active --quiet xray; then
+            XRAY_PID=$(pidof xray)
+            UPTIME=$(ps -p "$XRAY_PID" -o etime= | tr -d ' ')
+            echo -e "狀態: ${GREEN}▶ 執行中${PLAIN} (PID: $XRAY_PID)"
+            echo -e "時長: ${GREEN}$UPTIME${PLAIN}"
+        else
+            echo -e "狀態: ${RED}■ 已停止${PLAIN}"
+            echo -e "時長: ${RED}N/A${PLAIN}"
+        fi
+        
         echo -e "-------------------------------------------------"
-        echo -e " 1. 系統服務詳情 | 2. 存取日誌 (20條) | 3. ${YELLOW}實時監控 (Ctrl+C退出)${PLAIN} | 0. 返回"
-        read -rp "請選擇: " l_choice < /dev/tty
+        echo -e " 1. 查看系統日誌 (排錯用)"
+        echo -e " 0. 返回"
+        read -rp "請選擇: " l_choice
         case $l_choice in
-            1) clear; systemctl status xray --no-pager -l; read -rp "按 Enter..." ;;
-            2) clear; tail -n 20 "$XRAY_LOG_DIR/access.log" 2>/dev/null || echo "無日誌"; read -rp "按 Enter..." ;;
-            3) clear; tail -f "$XRAY_LOG_DIR/access.log" 2>/dev/null || echo "無日誌"; sleep 1 ;;
+            1) clear; journalctl -u xray -n 30 --no-pager; read -rp "按 Enter 返回..." dummy ;;
             0) break ;;
         esac
     done
 }
 
-# (其餘 manage_service, update_geo, uninstall_xray 保持不變)
-update_geo() {
-    clear; bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --only-dat-files; read -rp "返回..." dummy < /dev/tty
-}
-
-manage_service() {
-    clear; echo -e "1.啟動 2.停止 3.重啟"; read -rp "選: " s;
-    case $s in 1) systemctl start xray ;; 2) systemctl stop xray ;; 3) systemctl restart xray ;; esac
-}
-
 uninstall_xray() {
-    clear; read -rp "刪除？(y/N): " c;
-    if [[ "$c" == "y" ]]; then
+    clear
+    echo -e "${RED}=== ⚠️ 解除安裝 Xray ===${PLAIN}"
+    read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c
+    if [[ "$c" == "y" || "$c" == "Y" ]]; then
         bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --remove
-        rm -rf /usr/local/etc/xray /var/log/xray
+        rm -rf /usr/local/etc/xray
+        echo -e "${GREEN}已徹底刪除。${PLAIN}"
+        sleep 2
     fi
 }
 
@@ -212,13 +218,18 @@ while true; do
     echo -e "${BLUE}=================================================${PLAIN}"
     echo -e "  🚀 ${CYAN}Xray 管理面板 (xrm)${PLAIN}  $STATUS"
     echo -e "${BLUE}=================================================${PLAIN}"
-    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新 Xray | ${YELLOW} 2.${PLAIN} 編輯設定"
-    echo -e "${YELLOW} 3.${PLAIN} 更新數據文件   | ${YELLOW} 4.${PLAIN} 服務管理"
-    echo -e "${YELLOW} 5.${PLAIN} 狀態與即時日誌 | ${RED} 6.${PLAIN} 徹底解除安裝"
+    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新 (含數據) | ${YELLOW} 2.${PLAIN} 編輯設定"
+    echo -e "${YELLOW} 3.${PLAIN} 服務管理           | ${YELLOW} 4.${PLAIN} 狀態監控"
+    echo -e "${RED} 5.${PLAIN} 徹底解除安裝"
     echo -e "-------------------------------------------------"
     echo -e "${YELLOW} 0.${PLAIN} 退出"
-    read -rp "請選擇: " choice < /dev/tty
+    read -rp "請選擇: " choice
     case $choice in
-        1) install_xray ;; 2) edit_config ;; 3) update_geo ;; 4) manage_service ;; 5) show_status ;; 6) uninstall_xray ;; 0) exit 0 ;;
+        1) install_update_xray ;; 
+        2) edit_config ;; 
+        3) manage_service ;; 
+        4) show_status ;; 
+        5) uninstall_xray ;; 
+        0) clear; exit 0 ;;
     esac
 done
