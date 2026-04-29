@@ -36,10 +36,9 @@ install_update_xray() {
     clear
     echo -e "${BLUE}=== 📦 安裝/更新 Xray-core (含數據文件) ===${PLAIN}"
     echo -e "${YELLOW}正在執行官方安裝程序...${PLAIN}"
-    # 官方腳本預設會安裝/更新核心與 Geo 數據文件
     bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
     echo -e "\n${GREEN}✅ 安裝/更新成功！${PLAIN}"
-    read -rp "按 Enter 鍵返回..." dummy
+    read -rp "按 Enter 鍵返回..." dummy < /dev/tty
 }
 
 edit_config() {
@@ -139,7 +138,8 @@ edit_config() {
 EOF
     fi
 
-    nano "$XRAY_CONF"
+    # 確保 nano 編輯器也能抓到實體鍵盤輸入
+    nano "$XRAY_CONF" < /dev/tty
     echo -e "\n${YELLOW}正在檢測設定檔語法...${PLAIN}"
     
     TEST_RES=$(XRAY_LOCATION_ASSET=$XRAY_ASSETS "$XRAY_BIN" -test -config "$XRAY_CONF" 2>&1)
@@ -155,7 +155,7 @@ EOF
         echo "$TEST_RES"
         echo -e "${CYAN}-------------------------------------------------${PLAIN}"
     fi
-    read -rp "按 Enter 鍵返回主選單..." dummy
+    read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
 }
 
 manage_service() {
@@ -163,7 +163,7 @@ manage_service() {
     echo -e "${BLUE}=== ⚡ 3. 服務管理 ===${PLAIN}"
     echo -e " 1. ${GREEN}啟動${PLAIN} | 2. ${RED}停止${PLAIN} | 3. ${YELLOW}重啟${PLAIN} | 0. 返回"
     echo -e "-------------------------------------------------"
-    read -rp "請選擇: " s
+    read -rp "請選擇: " s < /dev/tty
     case $s in 
         1) systemctl start xray && echo -e "${GREEN}已啟動${PLAIN}" ;; 
         2) systemctl stop xray && echo -e "${RED}已停止${PLAIN}" ;; 
@@ -192,9 +192,9 @@ show_status() {
         echo -e "-------------------------------------------------"
         echo -e " 1. 查看系統日誌 (排錯用)"
         echo -e " 0. 返回"
-        read -rp "請選擇: " l_choice
+        read -rp "請選擇: " l_choice < /dev/tty
         case $l_choice in
-            1) clear; journalctl -u xray -n 30 --no-pager; read -rp "按 Enter 返回..." dummy ;;
+            1) clear; journalctl -u xray -n 30 --no-pager; read -rp "按 Enter 返回..." dummy < /dev/tty ;;
             0) break ;;
         esac
     done
@@ -203,7 +203,7 @@ show_status() {
 uninstall_xray() {
     clear
     echo -e "${RED}=== ⚠️ 解除安裝 Xray ===${PLAIN}"
-    read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c
+    read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c < /dev/tty
     if [[ "$c" == "y" || "$c" == "Y" ]]; then
         bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --remove
         rm -rf /usr/local/etc/xray
@@ -223,7 +223,10 @@ while true; do
     echo -e "${RED} 5.${PLAIN} 徹底解除安裝"
     echo -e "-------------------------------------------------"
     echo -e "${YELLOW} 0.${PLAIN} 退出"
-    read -rp "請選擇: " choice
+    
+    # 這裡是最關鍵的修復點，確保選單不會因為讀不到輸入而死迴圈
+    read -rp "請選擇: " choice < /dev/tty
+    
     case $choice in
         1) install_update_xray ;; 
         2) edit_config ;; 
