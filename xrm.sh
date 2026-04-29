@@ -104,7 +104,7 @@ edit_config() {
       "tag": "direct",
       "protocol": "freedom",
       "settings": {
-        "domainStrategy": "UseIPv4" 
+        "domainStrategy": "UseIPv4"
       }
     },
     {
@@ -122,18 +122,22 @@ edit_config() {
     "rules": [
       {
         "type": "field",
-        "protocol": ["dns"],
+        "protocol": [
+          "dns"
+        ],
         "outboundTag": "direct"
       },
       {
         "type": "field",
         "port": 443,
         "network": "udp",
-        "outboundTag": "block" 
+        "outboundTag": "block"
       },
       {
         "type": "field",
-        "ip": ["geoip:private"],
+        "ip": [
+          "geoip:private"
+        ],
         "outboundTag": "direct"
       },
       {
@@ -156,20 +160,24 @@ EOF
     # --- 自動檢測與重啟邏輯 ---
     echo -e "\n${YELLOW}正在檢測設定檔語法...${PLAIN}"
     
-    # 使用 xray 內建的測試指令
-    if "$XRAY_BIN" test -c "$XRAY_CONF" > /dev/null 2>&1; then
+    # 執行測試並將錯誤日誌存入變數
+    TEST_RES=$("$XRAY_BIN" test -c "$XRAY_CONF" 2>&1)
+    
+    if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ 語法檢測通過！正在重啟 Xray 服務...${PLAIN}"
         systemctl restart xray
-        
+        sleep 1
         if systemctl is-active --quiet xray; then
             echo -e "${GREEN}🚀 Xray 重啟成功並已在背景運行。${PLAIN}"
         else
-            echo -e "${RED}❌ 重啟失敗，請檢查系統日誌 (選項 5)。${PLAIN}"
+            echo -e "${RED}❌ 重啟失敗，請檢查系統日誌。${PLAIN}"
         fi
     else
-        echo -e "${RED}❌ 語法檢測失敗！${PLAIN}"
-        echo -e "${YELLOW}請檢查 JSON 格式是否正確（括號、逗號是否對應）。${PLAIN}"
-        echo -e "${CYAN}提示：剛才的修改未生效，服務仍保持原狀執行。${PLAIN}"
+        echo -e "${RED}❌ 語法檢測失敗！詳細報錯如下：${PLAIN}"
+        echo -e "${CYAN}-------------------------------------------------${PLAIN}"
+        echo "$TEST_RES"
+        echo -e "${CYAN}-------------------------------------------------${PLAIN}"
+        echo -e "${YELLOW}提示：剛才的修改未生效，服務仍保持原狀執行。${PLAIN}"
     fi
     
     read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
