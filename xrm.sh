@@ -205,10 +205,22 @@ uninstall_xray() {
     echo -e "${RED}=== ⚠️ 解除安裝 Xray ===${PLAIN}"
     read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c < /dev/tty
     if [[ "$c" == "y" || "$c" == "Y" ]]; then
+        echo -e "${YELLOW}正在移除 Xray 核心服務...${PLAIN}"
+        # 1. 執行官方卸載 (purge 會連帶清理系統服務連結)
         bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) remove --purge
+        
+        echo -e "${YELLOW}正在清理殘留文件與日誌...${PLAIN}"
+        # 2. 強制刪除配置目錄
         rm -rf /usr/local/etc/xray
-        echo -e "${GREEN}已徹底刪除。${PLAIN}"
+        # 3. 強制刪除日誌目錄 (這是最常被遺忘的)
+        rm -rf /var/log/xray
+        # 4. 清理數據文件目錄
+        rm -rf /usr/local/share/xray
+        
+        echo -e "${GREEN}✅ 所有組件已徹底清除！${PLAIN}"
+        echo -e "${CYAN}腳本即將退出，'xrm' 指令打開。${PLAIN}"
         sleep 2
+        exit 0
     fi
 }
 
