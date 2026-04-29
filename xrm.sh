@@ -241,8 +241,14 @@ uninstall_xray() {
     
     read -rp "您確定要解除安裝嗎？請輸入 'y' 確認: " confirm < /dev/tty
     if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+        # 1. 執行官方卸載
         bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --remove
-        echo -e "\n${GREEN}✅ Xray 已從此伺服器徹底移除！${PLAIN}"
+        
+        # 2. 【新增】強制刪除殘留的配置目錄與日誌目錄，確保下次安裝是「全新」的
+        rm -rf /usr/local/etc/xray
+        rm -rf /var/log/xray
+        
+        echo -e "\n${GREEN}✅ Xray 已從此伺服器徹底移除（含配置檔）！${PLAIN}"
         echo -e "${YELLOW}註：此管理面板 (xrm) 仍保留，若要刪除請執行: rm -f /usr/local/bin/xrm${PLAIN}"
     else
         echo -e "\n${BLUE}已取消操作。${PLAIN}"
