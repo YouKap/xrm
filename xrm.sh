@@ -218,7 +218,7 @@ while true; do
     echo -e "${BLUE}=================================================${PLAIN}"
     echo -e "  🚀 ${CYAN}Xray 管理面板 (xrm)${PLAIN}  $STATUS"
     echo -e "${BLUE}=================================================${PLAIN}"
-    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新 (含數據) | ${YELLOW} 2.${PLAIN} 編輯設定"
+    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新| ${YELLOW} 2.${PLAIN} 編輯設定"
     echo -e "${YELLOW} 3.${PLAIN} 服務管理           | ${YELLOW} 4.${PLAIN} 狀態監控"
     echo -e "${RED} 5.${PLAIN} 徹底解除安裝"
     echo -e "-------------------------------------------------"
