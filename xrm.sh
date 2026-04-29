@@ -53,7 +53,7 @@ edit_config() {
         sleep 2 && return
     fi
 
-    # 優化邏輯：如果檔案不存在，或者檔案大小小於 10 字元 (避開 {} 這種空設定)
+    # 檢測檔案是否存在或是否為空
     if [ ! -f "$XRAY_CONF" ] || [ $(stat -c%s "$XRAY_CONF" 2>/dev/null || echo 0) -lt 10 ]; then
         echo -e "${YELLOW}檢測到設定檔為空或不存在，正在寫入預設模板...${PLAIN}"
         mkdir -p /usr/local/etc/xray
@@ -145,14 +145,33 @@ edit_config() {
   }
 }
 EOF
-        echo -e "${GREEN}預設模板已成功載入！${PLAIN}"
+        echo -e "${GREEN}預設模板已載入。${PLAIN}"
     fi
 
+    # 調用編輯器
     echo -e "${CYAN}即將打開 nano 編輯器...${PLAIN}"
     sleep 1
     nano "$XRAY_CONF" < /dev/tty
+
+    # --- 自動檢測與重啟邏輯 ---
+    echo -e "\n${YELLOW}正在檢測設定檔語法...${PLAIN}"
     
-    echo -e "\n${GREEN}✅ 設定檔編輯完畢！請記得重啟服務。${PLAIN}"
+    # 使用 xray 內建的測試指令
+    if "$XRAY_BIN" test -c "$XRAY_CONF" > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ 語法檢測通過！正在重啟 Xray 服務...${PLAIN}"
+        systemctl restart xray
+        
+        if systemctl is-active --quiet xray; then
+            echo -e "${GREEN}🚀 Xray 重啟成功並已在背景運行。${PLAIN}"
+        else
+            echo -e "${RED}❌ 重啟失敗，請檢查系統日誌 (選項 5)。${PLAIN}"
+        fi
+    else
+        echo -e "${RED}❌ 語法檢測失敗！${PLAIN}"
+        echo -e "${YELLOW}請檢查 JSON 格式是否正確（括號、逗號是否對應）。${PLAIN}"
+        echo -e "${CYAN}提示：剛才的修改未生效，服務仍保持原狀執行。${PLAIN}"
+    fi
+    
     read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
 }
 
