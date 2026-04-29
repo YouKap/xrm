@@ -60,12 +60,104 @@ edit_config() {
     fi
 
     if [ ! -f "$XRAY_CONF" ]; then
-        echo -e "${YELLOW}找不到設定檔，正在建立空白設定檔...${PLAIN}"
+        echo -e "${YELLOW}找不到設定檔，正在建立預設模板...${PLAIN}"
         mkdir -p /usr/local/etc/xray
-        echo "{}" > "$XRAY_CONF"
+        cat <<EOF > "$XRAY_CONF"
+{
+  "log": {
+    "loglevel": "none"
+  },
+  "dns": {
+    "servers": [
+      "https://1.1.1.1/dns-query",
+      "https://8.8.8.8/dns-query"
+    ],
+    "queryStrategy": "UseIPv4",
+    "tag": "dns-internal"
+  },
+  "inbounds": [
+    {
+      "port": 52880,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "1cb88fed-057a-40d0-9341-94e53f3c5371"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/2UdBFrva7BrM1zLxT"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4" 
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "none"
+        }
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": [
+          "dns"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "port": 443,
+        "network": "udp",
+        "outboundTag": "block" 
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
+EOF
+        echo -e "${GREEN}預設模板已寫入。${PLAIN}"
     fi
 
-    echo -e "${CYAN}即將打開 nano 編輯器，請貼上您的伺服端設定...${PLAIN}"
+    echo -e "${CYAN}即將打開 nano 編輯器，您可以檢視或修改設定...${PLAIN}"
     echo -e "${YELLOW}提示: 編輯完成後請按 Ctrl+O 存檔，Enter 確認，Ctrl+X 離開。${PLAIN}"
     sleep 2
     nano "$XRAY_CONF" < /dev/tty
