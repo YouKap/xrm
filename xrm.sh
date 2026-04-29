@@ -205,7 +205,7 @@ uninstall_xray() {
     echo -e "${RED}=== ⚠️ 解除安裝 Xray ===${PLAIN}"
     read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c < /dev/tty
     if [[ "$c" == "y" || "$c" == "Y" ]]; then
-        bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) --remove
+        bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) remove --purge
         rm -rf /usr/local/etc/xray
         echo -e "${GREEN}已徹底刪除。${PLAIN}"
         sleep 2
@@ -218,9 +218,11 @@ while true; do
     echo -e "${BLUE}=================================================${PLAIN}"
     echo -e "  🚀 ${CYAN}Xray 管理面板 (xrm)${PLAIN}  $STATUS"
     echo -e "${BLUE}=================================================${PLAIN}"
-    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新| ${YELLOW} 2.${PLAIN} 編輯設定"
-    echo -e "${YELLOW} 3.${PLAIN} 服務管理           | ${YELLOW} 4.${PLAIN} 狀態監控"
-    echo -e "${RED} 5.${PLAIN} 徹底解除安裝"
+    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新" 
+    echo -e "${YELLOW} 2.${PLAIN} 編輯設定"
+    echo -e "${YELLOW} 3.${PLAIN} 服務管理" 
+    echo -e "${YELLOW} 4.${PLAIN} 狀態監控"
+    echo -e "${RED} 5.${PLAIN} 徹底卸載"
     echo -e "-------------------------------------------------"
     echo -e "${YELLOW} 0.${PLAIN} 退出"
     
