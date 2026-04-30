@@ -4,7 +4,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-BLUE='\033[0;36m'
+BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 PLAIN='\033[0m'
 
@@ -38,6 +38,37 @@ install_update_xray() {
     echo -e "${YELLOW}正在執行官方安裝程序...${PLAIN}"
     bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
     echo -e "\n${GREEN}✅ 安裝/更新成功！${PLAIN}"
+    read -rp "按 Enter 鍵返回..." dummy < /dev/tty
+}
+
+# --- 新增：DNS 優化集成模組 ---
+setup_dns_optimization() {
+    clear
+    echo -e "${BLUE}=== 🛡️ 系統 DNS 優化 (systemd-resolved) ===${PLAIN}"
+    echo -e "${YELLOW}正在檢查並安裝 systemd-resolved...${PLAIN}"
+    apt-get update && apt-get install -y systemd-resolved
+
+    echo -e "${YELLOW}正在寫入設定檔 (/etc/systemd/resolved.conf)...${PLAIN}"
+    # 自動設置上游為 Xray 的 5300 端口
+    cat <<EOF > /etc/systemd/resolved.conf
+[Resolve]
+DNS=127.0.0.1:5300
+Domains=~.
+EOF
+
+    echo -e "${YELLOW}正在修正 /etc/resolv.conf 軟連結...${PLAIN}"
+    # 這是最關鍵的一步，確保系統真正使用 resolved
+    rm -f /etc/resolv.conf
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
+    echo -e "${YELLOW}正在啟動與應用服務...${PLAIN}"
+    systemctl daemon-reload
+    systemctl enable --now systemd-resolved
+    systemctl restart systemd-resolved
+
+    echo -e "\n${GREEN}✅ DNS 集成優化成功！${PLAIN}"
+    echo -e "目前路徑: ${CYAN}系統應用 -> systemd-resolved -> Xray (5300) -> DoH${PLAIN}"
+    echo -e "你可以使用 ${YELLOW}resolvectl status${PLAIN} 查看詳情。"
     read -rp "按 Enter 鍵返回..." dummy < /dev/tty
 }
 
@@ -158,7 +189,6 @@ edit_config() {
 EOF
     fi
 
-    # 確保 nano 編輯器也能抓到實體鍵盤輸入
     nano "$XRAY_CONF" < /dev/tty
     echo -e "\n${YELLOW}正在檢測設定檔語法...${PLAIN}"
     
@@ -170,10 +200,8 @@ EOF
         sleep 0.5
         systemctl is-active --quiet xray && echo -e "${GREEN}🚀 重啟成功。${PLAIN}"
     else
-        echo -e "${RED}❌ 語法檢測失敗！詳細報錯如下：${PLAIN}"
-        echo -e "${CYAN}-------------------------------------------------${PLAIN}"
+        echo -e "${RED}❌ 語法檢測失敗！${PLAIN}"
         echo "$TEST_RES"
-        echo -e "${CYAN}-------------------------------------------------${PLAIN}"
     fi
     read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
 }
@@ -182,65 +210,43 @@ manage_service() {
     clear
     echo -e "${BLUE}=== ⚡ 3. 服務管理 ===${PLAIN}"
     echo -e " 1. ${GREEN}啟動${PLAIN} | 2. ${RED}停止${PLAIN} | 3. ${YELLOW}重啟${PLAIN} | 0. 返回"
-    echo -e "-------------------------------------------------"
     read -rp "請選擇: " s < /dev/tty
     case $s in 
-        1) systemctl start xray && echo -e "${GREEN}已啟動${PLAIN}" ;; 
-        2) systemctl stop xray && echo -e "${RED}已停止${PLAIN}" ;; 
-        3) systemctl restart xray && echo -e "${YELLOW}已重啟${PLAIN}" ;; 
+        1) systemctl start xray ;; 
+        2) systemctl stop xray ;; 
+        3) systemctl restart xray ;; 
         0) return ;;
-        *) echo -e "${RED}無效選擇${PLAIN}" ;;
     esac
-    sleep 1
 }
 
 show_status() {
-    while true; do
-        clear
-        echo -e "${BLUE}=== 📊 4. 運行狀態監控 ===${PLAIN}"
-        
-        if systemctl is-active --quiet xray; then
-            XRAY_PID=$(pidof xray)
-            UPTIME=$(ps -p "$XRAY_PID" -o etime= | tr -d ' ')
-            echo -e "狀態: ${GREEN}▶ 執行中${PLAIN} (PID: $XRAY_PID)"
-            echo -e "時長: ${GREEN}$UPTIME${PLAIN}"
-        else
-            echo -e "狀態: ${RED}■ 已停止${PLAIN}"
-            echo -e "時長: ${RED}N/A${PLAIN}"
-        fi
-        
-        echo -e "-------------------------------------------------"
-        echo -e " 1. 查看系統日誌 (排錯用)"
-        echo -e " 0. 返回"
-        read -rp "請選擇: " l_choice < /dev/tty
-        case $l_choice in
-            1) clear; journalctl -u xray -n 30 --no-pager; read -rp "按 Enter 返回..." dummy < /dev/tty ;;
-            0) break ;;
-        esac
-    done
+    clear
+    echo -e "${BLUE}=== 📊 4. 運行狀態監控 ===${PLAIN}"
+    if systemctl is-active --quiet xray; then
+        echo -e "Xray 狀態: ${GREEN}執行中${PLAIN}"
+    else
+        echo -e "Xray 狀態: ${RED}停止${PLAIN}"
+    fi
+    
+    # 顯示 DNS 狀態
+    if systemctl is-active --quiet systemd-resolved; then
+        echo -e "DNS 優化: ${GREEN}已啟用 (systemd-resolved)${PLAIN}"
+    else
+        echo -e "DNS 優化: ${YELLOW}未啟用${PLAIN}"
+    fi
+    echo "-------------------------------------------------"
+    read -rp "按 Enter 返回..." dummy < /dev/tty
 }
 
 uninstall_xray() {
     clear
     echo -e "${RED}=== ⚠️ 解除安裝 Xray ===${PLAIN}"
-    read -rp "確定要徹底刪除 Xray 嗎？(y/N): " c < /dev/tty
+    read -rp "確定要刪除嗎？(y/N): " c < /dev/tty
     if [[ "$c" == "y" || "$c" == "Y" ]]; then
-        echo -e "${YELLOW}正在移除 Xray 核心服務...${PLAIN}"
-        # 1. 執行官方卸載 (purge 會連帶清理系統服務連結)
         bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) remove --purge
-        
-        echo -e "${YELLOW}正在清理殘留文件與日誌...${PLAIN}"
-        # 2. 強制刪除配置目錄
-        rm -rf /usr/local/etc/xray
-        # 3. 強制刪除日誌目錄 (這是最常被遺忘的)
-        rm -rf /var/log/xray
-        # 4. 清理數據文件目錄
-        rm -rf /usr/local/share/xray
-        
-        echo -e "${GREEN}✅ 所有組件已徹底清除！${PLAIN}"
-        echo -e "${CYAN}腳本即將退出，'xrm' 指令打開。${PLAIN}"
-        sleep 2
-        exit 0
+        rm -rf /usr/local/etc/xray /usr/local/share/xray
+        echo -e "${GREEN}✅ 已移除。${PLAIN}"
+        sleep 2; exit 0
     fi
 }
 
@@ -248,17 +254,17 @@ while true; do
     clear
     [[ -f "$XRAY_BIN" ]] && STATUS="${GREEN}(已安裝)${PLAIN}" || STATUS="${RED}(未安裝)${PLAIN}"
     echo -e "${BLUE}=================================================${PLAIN}"
-    echo -e "  🚀 ${CYAN}Xray 管理面板 (xrm)${PLAIN}  $STATUS"
+    echo -e "   🚀 ${CYAN}Xray 管理面板 (xrm)${PLAIN}   $STATUS"
     echo -e "${BLUE}=================================================${PLAIN}"
-    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新" 
-    echo -e "${YELLOW} 2.${PLAIN} 編輯設定"
+    echo -e "${YELLOW} 1.${PLAIN} 安裝/更新 Xray" 
+    echo -e "${YELLOW} 2.${PLAIN} 編輯 Xray 設定"
     echo -e "${YELLOW} 3.${PLAIN} 服務管理" 
     echo -e "${YELLOW} 4.${PLAIN} 狀態監控"
-    echo -e "${RED} 5.${PLAIN} 徹底卸載"
+    echo -e "${GREEN} 6. 系統 DNS 優化 (集成 Resolved)${PLAIN}" # 亮點功能
     echo -e "-------------------------------------------------"
+    echo -e "${RED} 5.${PLAIN} 徹底卸載"
     echo -e "${YELLOW} 0.${PLAIN} 退出"
     
-    # 這裡是最關鍵的修復點，確保選單不會因為讀不到輸入而死迴圈
     read -rp "請選擇: " choice < /dev/tty
     
     case $choice in
@@ -267,6 +273,7 @@ while true; do
         3) manage_service ;; 
         4) show_status ;; 
         5) uninstall_xray ;; 
+        6) setup_dns_optimization ;; # 呼叫新功能
         0) clear; exit 0 ;;
     esac
 done
