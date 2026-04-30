@@ -63,6 +63,17 @@ edit_config() {
   },
   "inbounds": [
     {
+      "tag": "dns-in",
+      "port": 5300,
+      "listen": "127.0.0.1",
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "1.1.1.1",
+        "port": 53,
+        "network": "udp"
+      }
+    },
+    {
       "port": 52880,
       "listen": "127.0.0.1",
       "protocol": "vless",
@@ -95,8 +106,12 @@ edit_config() {
       "tag": "direct",
       "protocol": "freedom",
       "settings": {
-        "domainStrategy": "UseIPv4" 
+        "domainStrategy": "UseIPv4"
       }
+    },
+    {
+      "tag": "dns-out",
+      "protocol": "dns"
     },
     {
       "tag": "block",
@@ -113,6 +128,11 @@ edit_config() {
     "rules": [
       {
         "type": "field",
+        "inboundTag": ["dns-in"],
+        "outboundTag": "dns-out"
+      },
+      {
+        "type": "field",
         "protocol": ["dns"],
         "outboundTag": "direct"
       },
@@ -120,7 +140,7 @@ edit_config() {
         "type": "field",
         "port": 443,
         "network": "udp",
-        "outboundTag": "block" 
+        "outboundTag": "block"
       },
       {
         "type": "field",
