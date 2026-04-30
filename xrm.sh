@@ -243,56 +243,47 @@ show_status() {
 
 check_dns_health() {
     clear
-    echo -e "${BLUE}=== 🔍 DNS 系統集成自檢 ===${PLAIN}"
+    echo -e "${BLUE}=== 🔍 DNS 系統集成自檢 (正在執行實時檢測...) ===${PLAIN}"
     local errors=0
 
-    # 1. 檢查 Xray 5300 端口
+    # 1. 檢查 Xray 監聽
     echo -n "1. 檢查 Xray DNS 監聽 (5300): "
     if ss -tulpn | grep -q ":5300"; then
-        echo -e "${GREEN}正常${PLAIN}"
+        echo -e "${GREEN}正常 (偵測到 Xray 正在運行)${PLAIN}"
     else
-        echo -e "${RED}異常 (Xray 未監聽 5300 端口)${PLAIN}"
+        echo -e "${RED}異常 (Xray 未在 5300 監聽)${PLAIN}"
         ((errors++))
     fi
 
-    # 2. 檢查 resolved 設定檔
+    # 2. 檢查 resolved 設定
     echo -n "2. 檢查 systemd-resolved 配置文件: "
-    if grep -q "DNS=127.0.0.1:5300" /etc/systemd/resolved.conf; then
-        echo -e "${GREEN}正確${PLAIN}"
+    if grep -q "DNS=127.0.0.1:5300" /etc/systemd/resolved.conf && grep -q "DNSSEC=no" /etc/systemd/resolved.conf; then
+        echo -e "${GREEN}正確 (已配置 5300 + DNSSEC=no)${PLAIN}"
     else
-        echo -e "${RED}錯誤 (未發現 DNS=127.0.0.1:5300)${PLAIN}"
+        echo -e "${RED}配置不全 (請確保包含 DNSSEC=no)${PLAIN}"
         ((errors++))
     fi
 
-    # 3. 檢查 resolv.conf 軟連結
-    echo -n "3. 檢查系統 resolv.conf 軟連結: "
-    if ls -l /etc/resolv.conf | grep -q "run/systemd/resolve"; then
-        echo -e "${GREEN}正確${PLAIN}"
+    # 3. 測試解析鏈路 (加入隨機數防止快取干擾)
+    local random_id=$RANDOM
+    local test_domain="test${random_id}.google.com"
+    echo -e "4. 正在發起實時解析測試 (${CYAN}${test_domain}${PLAIN})..."
+    
+    # 強制透過 resolved 進行全新查詢
+    if resolvectl query "$test_domain" --legend=no > /dev/null 2>&1; then
+        echo -e "   測試結果: ${GREEN}成功 (Resolved -> Xray 轉發正常)${PLAIN}"
     else
-        echo -e "${RED}錯誤 (系統未接管 resolved)${PLAIN}"
-        ((errors++))
-    fi
-
-    # 4. 測試解析鏈路 (核心測試)
-    echo -n "4. 測試解析鏈路 (Resolved -> Xray): "
-    # 使用 resolvectl 查詢，如果只返回 IPv4 且耗時極短，則成功
-    local test_query=$(resolvectl query www.google.com --legend=no 2>&1)
-    if [[ $? -eq 0 && ! "$test_query" =~ ":" ]]; then
-        echo -e "${GREEN}通暢 (僅 IPv4)${PLAIN}"
-    elif [[ $? -eq 0 ]]; then
-        echo -e "${YELLOW}通暢 (但包含 IPv6，請檢查 Xray 策略)${PLAIN}"
-    else
-        echo -e "${RED}失敗 (無法透過 resolved 解析)${PLAIN}"
+        echo -e "   測試結果: ${RED}失敗 (Resolved 無法從 Xray 獲取數據)${PLAIN}"
         ((errors++))
     fi
 
     echo -e "-------------------------------------------------"
     if [ $errors -eq 0 ]; then
-        echo -e "${GREEN}🎉 恭喜！DNS 鏈路完美運作中。${PLAIN}"
+        echo -e "${GREEN}🎉 自檢通過！系統運作正常。${PLAIN}"
     else
-        echo -e "${RED}❌ 檢測到 $errors 處配置異常，請重新運行 DNS 優化。${PLAIN}"
+        echo -e "${RED}❌ 檢測到 $errors 處異常。${PLAIN}"
     fi
-    read -rp "按 Enter 鍵返回..." dummy < /dev/tty
+    read -rp "按 Enter 鍵返回主選單..." dummy < /dev/tty
 }
 
 uninstall_xray() {
