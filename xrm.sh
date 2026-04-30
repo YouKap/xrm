@@ -124,7 +124,7 @@ edit_config() {
     }
   ],
   "routing": {
-    "domainStrategy": "UseIPv4",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
