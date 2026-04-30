@@ -54,6 +54,9 @@ setup_dns_optimization() {
 [Resolve]
 DNS=127.0.0.1:5300
 Domains=~.
+DNSSEC=no 
+DNSOverTLS=no
+LLMNR=no
 EOF
 
     echo -e "${YELLOW}正在修正 /etc/resolv.conf 軟連結...${PLAIN}"
