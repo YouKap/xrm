@@ -264,17 +264,21 @@ check_dns_health() {
         ((errors++))
     fi
 
-    # 3. 測試解析鏈路 (加入隨機數防止快取干擾)
-    local random_id=$RANDOM
-    local test_domain="test${random_id}.google.com"
-    echo -e "4. 正在發起實時解析測試 (${CYAN}${test_domain}${PLAIN})..."
+    # 3. 測試解析鏈路 (確保鏈路通暢)
+    echo -n "4. 正在發起實時解析測試 (google.com)... "
     
-    # 強制透過 resolved 進行全新查詢
-    if resolvectl query "$test_domain" --legend=no > /dev/null 2>&1; then
-        echo -e "   測試結果: ${GREEN}成功 (Resolved -> Xray 轉發正常)${PLAIN}"
+    # 使用 google.com 進行測試，這是一個 100% 存在的域名
+    # 如果連 google.com 都解析失敗，那才是真的鏈路斷了
+    if resolvectl query google.com --legend=no > /dev/null 2>&1; then
+        echo -e "${GREEN}成功 (Resolved -> Xray 轉發正常)${PLAIN}"
     else
-        echo -e "   測試結果: ${RED}失敗 (Resolved 無法從 Xray 獲取數據)${PLAIN}"
-        ((errors++))
+        # 如果失敗，嘗試第二次備用域名
+        if resolvectl query cloudflare.com --legend=no > /dev/null 2>&1; then
+            echo -e "${GREEN}成功 (Resolved -> Xray 轉發正常)${PLAIN}"
+        else
+            echo -e "${RED}失敗 (Resolved 無法從 Xray 獲取數據)${PLAIN}"
+            ((errors++))
+        fi
     fi
 
     echo -e "-------------------------------------------------"
